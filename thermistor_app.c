@@ -68,14 +68,11 @@
 #endif
 #include "wiced.h"
 #include "wiced_bt_ota_firmware_upgrade.h"
-
+#include "wiced_platform.h"
+#include "wiced_thermistor.h"
 /******************************************************************************
  *                                Constants
  ******************************************************************************/
-/* This is the temperature measurement interval which is same as configured in
- * the BT Configurator - The variable represents interval in milliseconds.
- */
-#define POLL_TIMER_IN_MS         (5000)
 
 /* Absolute value of an integer. The absolute value is always positive. */
 #ifndef ABS
@@ -101,6 +98,46 @@
  * linked with the ecdsa256_pub.c which exports the public key.
  */
 extern Point    ecdsa256_public_key;
+#endif
+
+/******************************************************************************
+ *                                Constants
+ ******************************************************************************/
+/* This is the temperature measurement interval which is same as configured in
+ * the BT Configurator - The variable represents interval in milliseconds.
+ */
+#define POLL_TIMER_IN_MS                5000               /* Milliseconds timer*/
+
+#ifndef THERMISTOR_aux_0_TRIGGER_OUT
+
+#ifdef CYW20719B1
+#define THERMISTOR_PIN  ADC_INPUT_P10                       /*CYW920719Q40EVB-01 has P10 connected to Thermistor*/
+#endif
+
+#ifdef CYW20735B1
+#define THERMISTOR_PIN  ADC_INPUT_P8                        /*CYW920735Q60EVB-01 has P8 connected to Thermistor*/
+#endif
+
+#ifdef CYW20835B1
+#define THERMISTOR_PIN  ADC_INPUT_P8                        /*CYW920835M2EVB-01 has P8 connected to Thermistor*/
+#endif
+
+#ifdef CYW20819A1
+#define THERMISTOR_PIN  ADC_INPUT_P8                        /*CYW920819EVB-02 has P8 connected to Thermistor*/
+#endif
+
+#ifdef CYW20820A1
+#define THERMISTOR_PIN  ADC_INPUT_P8                        /*CYW920820EVB-02 has P8 connected to Thermistor*/
+#endif
+
+#ifdef CYW20719B2
+#define THERMISTOR_PIN  ADC_INPUT_P10                        /*CYW920719B2Q40EVB-01 has P10 connected to Thermistor*/
+#endif
+
+#else
+
+#define THERMISTOR_PIN THERMISTOR_aux_0_TRIGGER_OUT
+
 #endif
 
 /******************************************************************************
@@ -131,8 +168,6 @@ static void seconds_timer_temperature_cb(uint32_t arg);
 
 static void thermistor_app_init(void);
 
-extern void thermistor_init(void);
-extern int16_t thermistor_read(void);
 
 /*******************************************************************
  *                              Function Definitions
@@ -274,10 +309,20 @@ static void seconds_timer_temperature_cb(uint32_t arg)
 {
     volatile int16_t    temperature             = 0;
 
+    thermistor_cfg_t thermistor_cfg;
+    memset(&thermistor_cfg, 0, sizeof(thermistor_cfg_t));
+#if defined (CYBT_213043_MESH) // this BSP uses thermistor_ncp15xv103_lib
+    thermistor_cfg.high_pin       = ADC_INPUT_P14;
+    thermistor_cfg.low_pin        = ADC_INPUT_P11;
+    thermistor_cfg.adc_power_pin  = WICED_P09;
+#else
+    thermistor_cfg.high_pin = THERMISTOR_PIN; /* Input channel to measure DC voltage(temperature)-> GPIO 10 -> J12.1, J14.1 */
+#endif
+
     /*
      * Temperature values might vary upto +/-2 degree Celsius
      */
-    temperature = thermistor_read();
+    temperature = thermistor_read(&thermistor_cfg);
     WICED_BT_TRACE("\r\nTemperature (in degree Celsius) \t\t%d.%02d\r\n",
                     (temperature / 100),
                     ABS(temperature % 100));
